@@ -170,6 +170,16 @@ body.pc .item:hover { background: #1f1f23; }
 /* ---------- PC: botões e janela de edição ---------- */
 #barra { display: none; position: fixed; left: 14px; bottom: 10px; }
 body.pc #barra { display: block; }
+
+/* Botão de tela cheia (só no modo TV). Some quando já está em tela cheia. */
+#telaCheia {
+  display: none; position: fixed; right: 24px; bottom: 24px; z-index: 5;
+  background: #FFC72C; color: #0b0b0c; font-weight: bold; font-size: 26px; font-family: inherit;
+  padding: 16px 30px; border-radius: 14px; border: 4px solid #FFC72C; cursor: pointer;
+}
+#telaCheia:focus { border-color: #ffffff; outline: none; }
+body.tv #telaCheia { display: block; }
+body.tv.cheia #telaCheia { display: none; }
 .btn {
   display: inline-block; background: #FFC72C; color: #0b0b0c; font-weight: bold; font-size: 18px;
   padding: 10px 20px; border-radius: 10px; cursor: pointer; border: 0; margin-right: 8px; font-family: inherit;
@@ -198,6 +208,7 @@ body.pc #barra { display: block; }
   <div id="topo"></div>
   <div id="quadro"></div>
   <div id="status"></div>
+  <button id="telaCheia" onclick="alternarTelaCheia()">&#x26F6; Tela cheia (aperte OK)</button>
   <div id="barra">
     <button class="btn" onclick="abrirEditor()">Editar daily</button>
     <button class="btn sec" onclick="abrirTV()">Abrir modo TV</button>
@@ -208,7 +219,7 @@ body.pc #barra { display: block; }
 <script>
 /* =================== utilidades (ES5) =================== */
 var MODO_TV = /[?&]tv/i.test(window.location.search);
-if (!MODO_TV) document.body.className = 'pc';
+document.body.className = MODO_TV ? 'tv' : 'pc';
 var CORES = ['#FFC72C', '#4aa3ff', '#3ecf7a', '#c58cff', '#ff8a5c', '#5ad1e8', '#ff6fa5', '#a4d65e', '#ffd166', '#8fa8ff', '#e07be0', '#6ee7b7'];
 
 function trim(s) { return String(s).replace(/^\s+|\s+$/g, ''); }
@@ -548,7 +559,38 @@ function abrirTV() {
 }
 
 /* =================== início =================== */
+/* =================== tela cheia (TV) =================== */
+function elementoCheio() {
+  return document.fullscreenElement || document.webkitFullscreenElement || document.webkitCurrentFullScreenElement || null;
+}
+function alternarTelaCheia() {
+  var el = document.documentElement;
+  if (!elementoCheio()) {
+    var pedir = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen;
+    if (pedir) { try { pedir.call(el); } catch (e) {} }
+  } else {
+    var sair = document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen;
+    if (sair) { try { sair.call(document); } catch (e2) {} }
+  }
+}
+function mudouTelaCheia() {
+  document.body.className = (MODO_TV ? 'tv' : 'pc') + (elementoCheio() ? ' cheia' : '');
+  layoutAnterior = null;
+  setTimeout(function () { if (estado.texto) render(false); }, 400);
+}
+document.addEventListener('fullscreenchange', mudouTelaCheia, false);
+document.addEventListener('webkitfullscreenchange', mudouTelaCheia, false);
+/* No controle remoto: OK/Enter alterna a tela cheia */
+document.addEventListener('keydown', function (ev) {
+  if (!MODO_TV) return;
+  var k = ev.keyCode || ev.which;
+  var alvo = ev.target || ev.srcElement;
+  if (alvo && alvo.id === 'telaCheia') return; // o próprio botão já trata o OK
+  if (k === 13) { alternarTelaCheia(); if (ev.preventDefault) ev.preventDefault(); }
+}, false);
+
 window.onload = function () {
+  if (MODO_TV) { try { document.getElementById('telaCheia').focus(); } catch (e) {} }
   carregar(true);
   carregarMonday();
   setInterval(function () { carregar(false); }, CONFIG.SEGUNDOS_TICKS * 1000);
