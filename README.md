@@ -1,6 +1,6 @@
 # Dash TV · TO-DO do dia (12P Delivery)
 
-Página única em ES5 (compatível com o navegador da Samsung/Tizen).
+Página única em ES5 puro (compatível com o navegador da Samsung/Tizen).
 
 - **TV:** `https://kairosjg.github.io/dash-tv-todo/?tv`, só exibe e atualiza sozinha (ticks a cada 15 s, monday a cada 3 min).
 - **PC:** `https://kairosjg.github.io/dash-tv-todo/`, clique nas tarefas para marcar como feitas e use **Editar daily** para colar a daily do dia.
