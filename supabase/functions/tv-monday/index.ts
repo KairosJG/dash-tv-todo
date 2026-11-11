@@ -1,11 +1,15 @@
-// Conta, no quadro "Delivery 🟡 Produção" (grupo Tarefas Pendentes), quantos projetos
-// ainda não receberam comentário humano HOJE (fuso de São Paulo), por pessoa do Delivery FUP.
+// "Quarteto sem FUP": conta, nos quadros Produção, Financeiro Inicial e Financeiro Final
+// (grupo Tarefas Pendentes), quantos itens ainda não receberam comentário humano HOJE
+// (fuso de São Paulo), por pessoa do Delivery FUP.
 // Comentários automáticos (sem autor ou começando com 🤖) não contam.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const BOARD_ID = 18303087624;
 const GRUPO = "topics"; // Tarefas Pendentes
-const COLUNA_FUP = "lookup_mm6bfsyr"; // Delivery FUP (espelho)
+const QUADROS = [
+  { id: 18303087624, nome: "Produção", fup: "lookup_mm6bfsyr" },
+  { id: 18325634208, nome: "Financeiro Inicial", fup: "lookup_mm6b602a" },
+  { id: 18379293104, nome: "Financeiro Final", fup: "lookup_mm6bkd7k" },
+];
 const PESSOAS: { nome: string; busca: string }[] = [
   { nome: "Pietra", busca: "pietra" },
   { nome: "Rhany", busca: "rhaniery" },
@@ -42,26 +46,33 @@ async function monday(query: string, variables: Record<string, unknown>) {
   return j.data;
 }
 
-const CAMPOS = `items { id name updates(limit: 10) { created_at text_body creator { id } }
-  column_values(ids: ["${COLUNA_FUP}"]) { ... on MirrorValue { display_value } } }`;
+const campos = (fup: string) => `items { id name updates(limit: 10) { created_at text_body creator { id } }
+  column_values(ids: ["${fup}"]) { ... on MirrorValue { display_value } } }`;
 
-async function calcular() {
-  const hoje = hojeSP();
+async function itensDoQuadro(q: { id: number; nome: string; fup: string }) {
   const itens: any[] = [];
   let d = await monday(
-    `query($b:[ID!]){ boards(ids:$b){ groups(ids:["${GRUPO}"]){ items_page(limit:200){ cursor ${CAMPOS} } } } }`,
-    { b: [BOARD_ID] },
+    `query($b:[ID!]){ boards(ids:$b){ groups(ids:["${GRUPO}"]){ items_page(limit:100){ cursor ${campos(q.fup)} } } } }`,
+    { b: [q.id] },
   );
   let page = d.boards[0].groups[0].items_page;
   itens.push(...page.items);
   while (page.cursor) {
-    d = await monday(`query($c:String!){ next_items_page(cursor:$c, limit:200){ cursor ${CAMPOS} } }`, { c: page.cursor });
+    d = await monday(`query($c:String!){ next_items_page(cursor:$c, limit:100){ cursor ${campos(q.fup)} } }`, { c: page.cursor });
     page = d.next_items_page;
     itens.push(...page.items);
   }
+  return itens.map((it) => ({ ...it, quadro: q.nome }));
+}
+
+async function calcular() {
+  const hoje = hojeSP();
+  const itens = (await Promise.all(QUADROS.map(itensDoQuadro))).flat();
 
   const porPessoa: Record<string, { sem: number; total: number; projetos: string[] }> = {};
   for (const p of PESSOAS) porPessoa[p.nome] = { sem: 0, total: 0, projetos: [] };
+  const porQuadro: Record<string, { sem: number; total: number }> = {};
+  for (const q of QUADROS) porQuadro[q.nome] = { sem: 0, total: 0 };
   let totalSem = 0, totalProjetos = 0;
 
   for (const it of itens) {
@@ -72,10 +83,11 @@ async function calcular() {
       u.creator && u.creator.id && !String(u.text_body ?? "").trim().startsWith("🤖") && diaSP(u.created_at) === hoje
     );
     totalProjetos++;
-    if (!comentouHoje) totalSem++;
+    porQuadro[it.quadro].total++;
+    if (!comentouHoje) { totalSem++; porQuadro[it.quadro].sem++; }
     for (const p of donos) {
       porPessoa[p.nome].total++;
-      if (!comentouHoje) { porPessoa[p.nome].sem++; porPessoa[p.nome].projetos.push(it.name); }
+      if (!comentouHoje) { porPessoa[p.nome].sem++; porPessoa[p.nome].projetos.push(it.quadro + " · " + it.name); }
     }
   }
   return {
@@ -83,6 +95,7 @@ async function calcular() {
     total_sem_comentario: totalSem,
     total_projetos: totalProjetos,
     pessoas: PESSOAS.map((p) => ({ nome: p.nome, ...porPessoa[p.nome] })),
+    quadros: QUADROS.map((q) => ({ nome: q.nome, ...porQuadro[q.nome] })),
     calculado_em: new Date().toISOString(),
   };
 }
@@ -92,7 +105,10 @@ Deno.serve(async (req) => {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   try {
     const { data: cache } = await sb.from("tv_monday_cache").select("dados, atualizado_em").eq("id", 1).maybeSingle();
-    if (cache && Date.now() - new Date(cache.atualizado_em).getTime() < CACHE_SEGUNDOS * 1000 && cache.dados?.dia === hojeSP()) {
+    if (
+      cache && Date.now() - new Date(cache.atualizado_em).getTime() < CACHE_SEGUNDOS * 1000 &&
+      cache.dados?.dia === hojeSP() && cache.dados?.quadros
+    ) {
       return new Response(JSON.stringify(cache.dados), { headers: { ...cors, "Content-Type": "application/json" } });
     }
     const dados = await calcular();

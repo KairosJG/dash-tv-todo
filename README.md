@@ -17,4 +17,4 @@ DATA: 11/11
 
 ## Backend (Supabase: portal-delivery)
 - `supabase/migrations/001_tv_todo.sql`: tabelas `tv_daily`, `tv_ticks`, `tv_monday_cache`
-- `supabase/functions/tv-monday`: conta os projetos do quadro "Delivery 🟡 Produção" (grupo Tarefas Pendentes) sem comentário humano hoje, por Delivery FUP (Pietra, Rhany, Carol, Jana). Precisa do secret `MONDAY_TOKEN`.
+- `supabase/functions/tv-monday`: "Quarteto sem FUP", conta os itens dos quadros Produção, Financeiro Inicial e Financeiro Final (grupo Tarefas Pendentes) sem comentário humano hoje, por Delivery FUP (Pietra, Rhany, Carol, Jana). Precisa do secret `MONDAY_TOKEN`.

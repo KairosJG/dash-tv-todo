@@ -83,27 +83,27 @@ body.pc { overflow: auto; }
 #app { position: relative; width: 100%; height: 100%; }
 
 /* ---------- Topo ---------- */
-#topo { background: #151517; border-bottom: 3px solid #2a2a2e; padding: 14px 36px 12px 36px; }
+#topo { font-size: 16px; background: #151517; border-bottom: 3px solid #2a2a2e; padding: 0.875em 2.25em 0.75em 2.25em; }
 #topo .linha { overflow: hidden; }
-#topo .tit { float: left; font-size: 52px; font-weight: bold; line-height: 80px; letter-spacing: 1px; }
+#topo .tit { float: left; font-size: 3.25em; font-weight: bold; line-height: 1.538em; letter-spacing: 1px; }
 #topo .tit .ouro { color: #FFC72C; }
-#topo .tit .sub { color: #9a9a9f; font-size: 30px; font-weight: normal; margin-left: 14px; }
+#topo .tit .sub { color: #9a9a9f; font-size: 0.5769em; font-weight: normal; margin-left: 0.4667em; }
 #topo .dir { float: right; }
-#topo .bloco { display: inline-block; vertical-align: middle; margin-left: 46px; text-align: center; }
-#topo .num { font-size: 50px; font-weight: bold; line-height: 56px; }
-#topo .lbl { font-size: 17px; color: #9a9a9f; text-transform: uppercase; letter-spacing: 2px; line-height: 22px; }
-#topo .relogio { font-size: 58px; font-weight: bold; line-height: 56px; }
+#topo .bloco { display: inline-block; vertical-align: middle; margin-left: 2.875em; text-align: center; }
+#topo .num { font-size: 3.125em; font-weight: bold; line-height: 1.12em; }
+#topo .lbl { font-size: 1.062em; color: #9a9a9f; text-transform: uppercase; letter-spacing: 2px; line-height: 1.294em; }
+#topo .relogio { font-size: 3.625em; font-weight: bold; line-height: 0.9655em; }
 #topo .verde { color: #3ecf7a; }
 
-/* Faixa do monday */
-#monday { margin-top: 10px; background: #1c1c1f; border-radius: 12px; padding: 10px 22px; overflow: hidden; border-left: 8px solid #FFC72C; }
-#monday .mtit { float: left; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; color: #9a9a9f; line-height: 56px; font-weight: bold; }
-#monday .mtot { float: left; font-size: 52px; font-weight: bold; color: #FFC72C; line-height: 56px; margin: 0 26px 0 18px; }
-#monday .mtot small { font-size: 24px; color: #9a9a9f; font-weight: normal; }
-#monday .chip { float: left; margin-right: 14px; background: #26262a; border-radius: 10px; padding: 0 18px; line-height: 56px; font-size: 30px; }
-#monday .chip b { font-size: 38px; margin-left: 10px; color: #FFC72C; }
+/* Faixa do monday (Quarteto sem FUP) - nunca quebra linha */
+#monday { white-space: nowrap; margin-top: 0.625em; background: #1c1c1f; border-radius: 0.75em; padding: 0.625em 1.375em; overflow: hidden; border-left: 0.5em solid #FFC72C; }
+#monday .mtit { display: inline-block; vertical-align: middle; font-size: 1.375em; letter-spacing: 2px; text-transform: uppercase; color: #9a9a9f; line-height: 2.545em; font-weight: bold; }
+#monday .mtot { display: inline-block; vertical-align: middle; font-size: 3.25em; font-weight: bold; color: #FFC72C; line-height: 1.077em; margin: 0 0.5em 0 0.3462em; }
+#monday .mtot small { font-size: 0.4615em; color: #9a9a9f; font-weight: normal; }
+#monday .chip { display: inline-block; vertical-align: middle; margin-right: 0.4667em; background: #26262a; border-radius: 0.3333em; padding: 0 0.6em; line-height: 1.867em; font-size: 1.875em; }
+#monday .chip b { font-size: 1.267em; margin-left: 0.2632em; color: #FFC72C; }
 #monday .chip.ok b { color: #3ecf7a; }
-#monday .mhora { float: right; font-size: 18px; color: #6f6f75; line-height: 56px; }
+#monday .mhora { float: right; font-size: 1.125em; color: #6f6f75; line-height: 3.111em; }
 #monday.erro { border-left-color: #6f6f75; }
 #monday.erro .mtot { color: #6f6f75; }
 body.pc #monday { cursor: pointer; }
@@ -309,7 +309,12 @@ function htmlCard(p, idx) {
   };
 }
 
+function escalaTopo() {
+  var w = window.innerWidth || document.documentElement.clientWidth || 1920;
+  document.getElementById('topo').style.fontSize = (16 * w / 1920).toFixed(2) + 'px';
+}
 function montarTopo(d, totalItens, totalFeitos) {
+  escalaTopo();
   var data = d.data || (estado.dia ? isoParaBR(estado.dia) : '');
   var antiga = estado.dia && estado.dia !== hojeISO();
   var h = '<div class="linha">' +
@@ -326,10 +331,10 @@ function montarTopo(d, totalItens, totalFeitos) {
 function htmlMonday() {
   var m = estado.monday;
   if (!m) {
-    return '<div id="monday" class="erro" onclick="verProjetos()"><span class="mtit">Produção sem comentário hoje</span><span class="mtot">&ndash;</span>' +
+    return '<div id="monday" class="erro" onclick="verProjetos()"><span class="mtit">Quarteto sem FUP</span><span class="mtot">&ndash;</span>' +
       '<span class="mhora">' + (estado.mondayErro ? 'monday indisponível' : 'carregando...') + '</span></div>';
   }
-  var h = '<div id="monday" onclick="verProjetos()"><span class="mtit">Produção sem comentário hoje</span>' +
+  var h = '<div id="monday" onclick="verProjetos()"><span class="mtit">Quarteto sem FUP</span>' +
     '<span class="mtot">' + m.total_sem_comentario + ' <small>de ' + m.total_projetos + '</small></span>';
   for (var i = 0; i < m.pessoas.length; i++) {
     var p = m.pessoas[i];
@@ -518,10 +523,12 @@ function salvarDaily() {
 function verProjetos() {
   if (MODO_TV) return;
   var m = estado.monday, c = document.getElementById('caixa');
-  var h = '<h2>Projetos da Produção sem comentário hoje</h2>';
+  var h = '<h2>Quarteto sem FUP hoje</h2>';
   if (!m) h += '<p>' + esc(estado.mondayErro || 'Ainda carregando...') + '</p>';
   else {
-    h += '<div class="ajuda">Quadro "Delivery Produção", grupo Tarefas Pendentes, pela coluna Delivery FUP. ' +
+    var qs = '';
+    for (var q = 0; m.quadros && q < m.quadros.length; q++) qs += (q ? ' &middot; ' : '') + esc(m.quadros[q].nome) + ': ' + m.quadros[q].sem + ' de ' + m.quadros[q].total;
+    h += '<div class="ajuda">Quadros Produção, Financeiro Inicial e Financeiro Final (grupo Tarefas Pendentes), pela coluna Delivery FUP.<br>' + qs + '<br>' +
       'Conta só comentário de pessoa feito hoje (os automáticos com 🤖 não contam).</div><div class="lista">';
     for (var i = 0; i < m.pessoas.length; i++) {
       var p = m.pessoas[i];
