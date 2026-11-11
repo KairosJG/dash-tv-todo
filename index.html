@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>12P · TO-DO do dia</title>
+<!--
+  Dash de TO-DO da TV (12P Delivery)
+  - Na TV:   abra o link com ?tv no final  (ex: .../index.html?tv)  -> só exibe, atualiza sozinho
+  - No PC:   abra o link normal            -> clique nas tarefas para marcar como feitas
+                                             botão "Editar daily" para colar a daily do dia
+  Código em ES5 puro (sem recursos modernos) para rodar no navegador da Samsung (Tizen).
+-->
+<script>
+var CONFIG = {
+  SUPABASE_URL: 'https://mhzcnaqrmvugfeanmito.supabase.co',
+  SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oemNuYXFybXZ1Z2ZlYW5taXRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MzQzMDAsImV4cCI6MjEwOTQxMDMwMH0.uQaS2lZa-a9WKpz2Tm1-exLMQ-7wvtO56OXxOkvQXGU',
+  SEGUNDOS_TICKS: 15,      // de quanto em quanto tempo a TV busca os ticks/daily
+  SEGUNDOS_MONDAY: 180     // de quanto em quanto tempo busca a contagem do monday
+};
+</script>
+<!-- Daily de exemplo: só é usada se ainda não houver nenhuma daily salva no banco. -->
+<script type="text/plain" id="exemplo">
+DATA: 11/11
+
+@ Guilherme
+! Entregas de novos: depende do Compras
+
+@ Matheus
+# RT
+Solvia
+# Reset
+Odan
+Yen - repatriação
+Sevenfix
+# Revisões
+7 entregas
+
+@ Heloisa
+4 novas auditorias
+7 reaproveitamento
+2 QC
+
+@ Maria
+4 radar
+2 doc final
+0 cadastro fornecedor (subiu, eram resets)
+# Pagamentos
+Ferreira & Ferreira
+MSD: 4 de final / 7 de inicial
+2 repasse
+! Finais: câmbios ainda não pagos (projetos com ganhos)
+Cobrança de off
+
+@ Rhany
+1 solicitação de inicial
+
+@ Carol | Folga
+
+@ Anna Clara
+7 correções de draft
+7 tasks de numerário (infos do cliente)
+Muitos pagamentos de numerário
+! 6 em desembaraço com problema
+7 tickets em aberto
+! 5 em logística pré-embarque com problema
+
+@ Beatriz
+Tickets
+WhatsApp
+Desembaraço em andamento
+</script>
+
+<style>
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+body {
+  background: #0b0b0c;
+  color: #f2f2f0;
+  font-family: "Samsung Sans", "SamsungOne", "Segoe UI", Roboto, Tahoma, Verdana, Arial, sans-serif;
+  font-size: 26px;
+}
+body.pc { overflow: auto; }
+#app { position: relative; width: 100%; height: 100%; }
+
+/* ---------- Topo ---------- */
+#topo { background: #151517; border-bottom: 3px solid #2a2a2e; padding: 14px 36px 12px 36px; }
+#topo .linha { overflow: hidden; }
+#topo .tit { float: left; font-size: 52px; font-weight: bold; line-height: 80px; letter-spacing: 1px; }
+#topo .tit .ouro { color: #FFC72C; }
+#topo .tit .sub { color: #9a9a9f; font-size: 30px; font-weight: normal; margin-left: 14px; }
+#topo .dir { float: right; }
+#topo .bloco { display: inline-block; vertical-align: middle; margin-left: 46px; text-align: center; }
+#topo .num { font-size: 50px; font-weight: bold; line-height: 56px; }
+#topo .lbl { font-size: 17px; color: #9a9a9f; text-transform: uppercase; letter-spacing: 2px; line-height: 22px; }
+#topo .relogio { font-size: 58px; font-weight: bold; line-height: 56px; }
+#topo .verde { color: #3ecf7a; }
+
+/* Faixa do monday */
+#monday { margin-top: 10px; background: #1c1c1f; border-radius: 12px; padding: 10px 22px; overflow: hidden; border-left: 8px solid #FFC72C; }
+#monday .mtit { float: left; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; color: #9a9a9f; line-height: 56px; font-weight: bold; }
+#monday .mtot { float: left; font-size: 52px; font-weight: bold; color: #FFC72C; line-height: 56px; margin: 0 26px 0 18px; }
+#monday .mtot small { font-size: 24px; color: #9a9a9f; font-weight: normal; }
+#monday .chip { float: left; margin-right: 14px; background: #26262a; border-radius: 10px; padding: 0 18px; line-height: 56px; font-size: 30px; }
+#monday .chip b { font-size: 38px; margin-left: 10px; color: #FFC72C; }
+#monday .chip.ok b { color: #3ecf7a; }
+#monday .mhora { float: right; font-size: 18px; color: #6f6f75; line-height: 56px; }
+#monday.erro { border-left-color: #6f6f75; }
+#monday.erro .mtot { color: #6f6f75; }
+body.pc #monday { cursor: pointer; }
+
+/* ---------- Cards ---------- */
+#quadro { padding: 16px 12px 0 12px; }
+.coluna { float: left; padding: 0 9px; -webkit-box-sizing: border-box; box-sizing: border-box; }
+.limpa { clear: both; }
+
+.card {
+  background: #151517;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  border-top: 8px solid #FFC72C;
+  padding: 0.4em 0.6em 0.45em 0.6em;
+  overflow: hidden;
+}
+.card .nome { font-size: 1.4em; font-weight: bold; line-height: 1.15em; margin-bottom: 0.12em; }
+.card .qtd { float: right; font-size: 0.55em; color: #9a9a9f; margin-top: 0.7em; font-weight: normal; }
+.card .qtd.tudo { color: #3ecf7a; font-weight: bold; }
+.card .grupo {
+  font-size: 0.74em; text-transform: uppercase; letter-spacing: 2px; color: #9a9a9f; font-weight: bold;
+  margin: 0.5em 0 0.12em 0; border-bottom: 2px solid #2a2a2e; padding-bottom: 0.1em;
+}
+.item { position: relative; line-height: 1.25em; padding: 0.2em 0 0.2em 1.9em; min-height: 1.25em; }
+body.pc .item { cursor: pointer; border-radius: 8px; }
+body.pc .item:hover { background: #1f1f23; }
+.item .bol {
+  position: absolute; left: 0.45em; top: 0.7em; width: 0.42em; height: 0.42em; border-radius: 50%; background: #55555c;
+}
+.item .badge {
+  position: absolute; left: 0; top: 0.16em; min-width: 1.5em; height: 1.35em; line-height: 1.35em;
+  text-align: center; font-weight: bold; border-radius: 0.3em; background: #2f2f35; color: #ffffff;
+}
+.item .badge.zero { background: #222226; color: #77777d; }
+.item.alerta { color: #ffb0b0; }
+.item.alerta .bol { background: #ef5b5b; width: 0.55em; height: 0.55em; left: 0.38em; top: 0.64em; }
+.item.alerta .badge { background: #b83232; }
+.card.temalerta { -webkit-box-shadow: inset 0 0 0 3px #5a2323; box-shadow: inset 0 0 0 3px #5a2323; }
+
+/* Feito */
+.item.feito { color: #6f6f75; text-decoration: line-through; }
+.item.feito .bol, .item.feito .badge {
+  background: #1f6b3f; color: #ffffff; text-decoration: none;
+}
+.item.feito .bol { width: 0.9em; height: 0.9em; left: 0.22em; top: 0.38em; text-align: center; }
+.item .ck { display: none; }
+.item.feito .ck {
+  display: block; position: absolute; left: 0.3em; top: 0.2em; color: #3ecf7a; font-weight: bold; font-size: 1em;
+}
+.item.feito .bol { background: transparent; }
+.item.feito .badge { background: #1f6b3f; }
+
+.card.folga { background: #121214; border-top-color: #3a3a40 !important; color: #6f6f75; }
+.card.folga .nome { color: #6f6f75 !important; }
+.card.folga .tag {
+  display: inline-block; font-size: 0.85em; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;
+  padding: 0.12em 0.6em; border-radius: 0.3em; background: #222226; color: #9a9a9f; margin-top: 0.1em;
+}
+
+#status { position: fixed; right: 14px; bottom: 6px; font-size: 15px; color: #4a4a50; }
+#status.off { color: #ef5b5b; font-size: 20px; }
+
+/* ---------- PC: botões e janela de edição ---------- */
+#barra { display: none; position: fixed; left: 14px; bottom: 10px; }
+body.pc #barra { display: block; }
+.btn {
+  display: inline-block; background: #FFC72C; color: #0b0b0c; font-weight: bold; font-size: 18px;
+  padding: 10px 20px; border-radius: 10px; cursor: pointer; border: 0; margin-right: 8px; font-family: inherit;
+}
+.btn.sec { background: #2a2a2e; color: #f2f2f0; }
+#janela { display: none; position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 10; }
+#janela .caixa {
+  position: absolute; left: 50%; top: 4%; width: 900px; margin-left: -450px; bottom: 4%;
+  background: #151517; border-radius: 16px; padding: 24px 28px; -webkit-box-sizing: border-box; box-sizing: border-box;
+  font-size: 18px; overflow: auto;
+}
+#janela h2 { margin: 0 0 10px 0; font-size: 28px; color: #FFC72C; }
+#janela textarea {
+  width: 100%; height: 55%; background: #0b0b0c; color: #f2f2f0; border: 2px solid #2a2a2e; border-radius: 10px;
+  font-size: 18px; font-family: Consolas, "Courier New", monospace; padding: 12px; -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+#janela input[type=date] { font-size: 18px; padding: 6px; background: #0b0b0c; color: #f2f2f0; border: 2px solid #2a2a2e; border-radius: 8px; }
+#janela .ajuda { color: #9a9a9f; font-size: 16px; line-height: 1.5em; margin: 10px 0; }
+#janela code { background: #26262a; padding: 1px 6px; border-radius: 4px; color: #FFC72C; }
+#janela .lista h3 { margin: 18px 0 6px 0; font-size: 22px; }
+#janela .lista li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topo"></div>
+  <div id="quadro"></div>
+  <div id="status"></div>
+  <div id="barra">
+    <button class="btn" onclick="abrirEditor()">Editar daily</button>
+    <button class="btn sec" onclick="abrirTV()">Abrir modo TV</button>
+  </div>
+  <div id="janela"><div class="caixa" id="caixa"></div></div>
+</div>
+
+<script>
+/* =================== utilidades (ES5) =================== */
+var MODO_TV = /[?&]tv/i.test(window.location.search);
+if (!MODO_TV) document.body.className = 'pc';
+var CORES = ['#FFC72C', '#4aa3ff', '#3ecf7a', '#c58cff', '#ff8a5c', '#5ad1e8', '#ff6fa5', '#a4d65e', '#ffd166', '#8fa8ff', '#e07be0', '#6ee7b7'];
+
+function trim(s) { return String(s).replace(/^\s+|\s+$/g, ''); }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function doisDig(n) { return n < 10 ? '0' + n : '' + n; }
+function hojeISO() { var a = new Date(); return a.getFullYear() + '-' + doisDig(a.getMonth() + 1) + '-' + doisDig(a.getDate()); }
+function isoParaBR(iso) { var p = String(iso).split('-'); return p.length === 3 ? p[2] + '/' + p[1] : iso; }
+var DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+function ajax(metodo, caminho, corpo, extras, ok, falha) {
+  var x = new XMLHttpRequest();
+  x.open(metodo, CONFIG.SUPABASE_URL + caminho, true);
+  x.setRequestHeader('apikey', CONFIG.SUPABASE_KEY);
+  x.setRequestHeader('Authorization', 'Bearer ' + CONFIG.SUPABASE_KEY);
+  if (corpo !== null) x.setRequestHeader('Content-Type', 'application/json');
+  if (extras) for (var k in extras) if (extras.hasOwnProperty(k)) x.setRequestHeader(k, extras[k]);
+  x.timeout = 20000;
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4) return;
+    if (x.status >= 200 && x.status < 300) {
+      var d = null;
+      try { d = x.responseText ? JSON.parse(x.responseText) : null; } catch (e) { d = null; }
+      if (ok) ok(d);
+    } else if (falha) {
+      var msg = x.status + ' ';
+      try { var j = JSON.parse(x.responseText); msg += (j.erro || j.message || ''); } catch (e2) { msg += x.responseText; }
+      falha(msg);
+    }
+  };
+  x.send(corpo !== null ? JSON.stringify(corpo) : null);
+}
+
+/* =================== estado =================== */
+var estado = {
+  dia: null,          // dia (AAAA-MM-DD) da daily mostrada
+  texto: '',
+  ticks: {},          // chave -> true
+  monday: null,
+  mondayErro: null,
+  online: true,
+  ultimaAssinatura: ''
+};
+
+/* =================== leitura da daily =================== */
+function lerDados(texto) {
+  var linhas = String(texto).split(/\r?\n/);
+  var r = { data: '', pessoas: [] };
+  var atual = null, grupo = '';
+  for (var i = 0; i < linhas.length; i++) {
+    var l = trim(linhas[i]);
+    if (!l) continue;
+    var m = l.match(/^data\s*:\s*(.*)$/i);
+    if (m) { r.data = m[1]; continue; }
+    if (l.charAt(0) === '@') {
+      var partes = trim(l.substring(1)).split('|');
+      atual = { nome: trim(partes[0]), status: partes.length > 1 ? trim(partes[1]) : '', itens: [] };
+      grupo = '';
+      r.pessoas.push(atual);
+      continue;
+    }
+    if (!atual) continue;
+    if (l.charAt(0) === '#') { grupo = trim(l.substring(1)); atual.itens.push({ tipo: 'grupo', texto: grupo }); continue; }
+    var alerta = false;
+    if (l.charAt(0) === '!') { alerta = true; l = trim(l.substring(1)); }
+    if (l.charAt(0) === '-' || l.charAt(0) === '*') l = trim(l.substring(1));
+    var num = null, mn = l.match(/^(\d+)\s+(.+)$/);
+    if (mn) { num = mn[1]; l = mn[2]; }
+    var chave = (atual.nome + '|' + grupo + '|' + (num !== null ? num + ' ' : '') + l).toLowerCase();
+    atual.itens.push({ tipo: 'item', texto: l, num: num, alerta: alerta, chave: chave });
+  }
+  return r;
+}
+
+/* =================== desenho =================== */
+function htmlCard(p, idx) {
+  var cor = CORES[idx % CORES.length];
+  var folga = /folga|f[eé]rias|ausente|atestado/i.test(p.status);
+  var temAlerta = false, n = 0, feitos = 0, h = '';
+  for (var i = 0; i < p.itens.length; i++) {
+    var it = p.itens[i];
+    if (it.tipo === 'grupo') { h += '<div class="grupo">' + esc(it.texto) + '</div>'; continue; }
+    n++;
+    var feito = !!estado.ticks[it.chave];
+    if (feito) feitos++;
+    if (it.alerta && !feito) temAlerta = true;
+    var marca = it.num !== null
+      ? '<span class="badge' + (it.num === '0' ? ' zero' : '') + '">' + esc(it.num) + '</span>'
+      : '<span class="bol"></span><span class="ck">&#10003;</span>';
+    h += '<div class="item' + (it.alerta ? ' alerta' : '') + (feito ? ' feito' : '') + '" data-chave="' + esc(it.chave) + '">' + marca + esc(it.texto) + '</div>';
+  }
+  var qtd = '';
+  if (!folga && n) qtd = '<span class="qtd' + (feitos === n ? ' tudo' : '') + '">' + (feitos === n ? '&#10003; ' : '') + feitos + '/' + n + '</span>';
+  var topo = '<div class="nome" style="color:' + cor + '">' + esc(p.nome) + qtd + '</div>';
+  if (p.status) h = '<span class="tag">' + esc(p.status) + '</span>' + h;
+  return {
+    html: '<div class="card' + (folga ? ' folga' : '') + (temAlerta ? ' temalerta' : '') + '" style="border-top-color:' + cor + '">' + topo + h + '</div>',
+    n: folga ? 0 : n, feitos: folga ? 0 : feitos, folga: folga
+  };
+}
+
+function montarTopo(d, totalItens, totalFeitos) {
+  var data = d.data || (estado.dia ? isoParaBR(estado.dia) : '');
+  var antiga = estado.dia && estado.dia !== hojeISO();
+  var h = '<div class="linha">' +
+    '<div class="tit">TO-DO <span class="ouro">DO DIA</span><span class="sub">Daily ' + esc(data) + (antiga ? ' (ainda não tem a de hoje)' : '') + '</span></div>' +
+    '<div class="dir">' +
+      '<div class="bloco"><div class="num' + (totalItens && totalFeitos === totalItens ? ' verde' : '') + '">' + totalFeitos + '<span style="color:#6f6f75">/' + totalItens + '</span></div><div class="lbl">tarefas feitas</div></div>' +
+      '<div class="bloco"><div class="relogio" id="relogio"></div><div class="lbl" id="diasem"></div></div>' +
+    '</div></div>';
+  h += htmlMonday();
+  document.getElementById('topo').innerHTML = h;
+  tick();
+}
+
+function htmlMonday() {
+  var m = estado.monday;
+  if (!m) {
+    return '<div id="monday" class="erro" onclick="verProjetos()"><span class="mtit">Produção sem comentário hoje</span><span class="mtot">&ndash;</span>' +
+      '<span class="mhora">' + (estado.mondayErro ? 'monday indisponível' : 'carregando...') + '</span></div>';
+  }
+  var h = '<div id="monday" onclick="verProjetos()"><span class="mtit">Produção sem comentário hoje</span>' +
+    '<span class="mtot">' + m.total_sem_comentario + ' <small>de ' + m.total_projetos + '</small></span>';
+  for (var i = 0; i < m.pessoas.length; i++) {
+    var p = m.pessoas[i];
+    h += '<span class="chip' + (p.sem === 0 ? ' ok' : '') + '">' + esc(p.nome) + '<b>' + p.sem + '</b></span>';
+  }
+  var hc = new Date(m.calculado_em);
+  h += '<span class="mhora">monday ' + (isNaN(hc.getTime()) ? '' : doisDig(hc.getHours()) + ':' + doisDig(hc.getMinutes())) + (estado.mondayErro ? ' (sem atualizar)' : '') + '</span></div>';
+  return h;
+}
+
+function tick() {
+  var a = new Date();
+  var r = document.getElementById('relogio');
+  if (r) r.innerHTML = doisDig(a.getHours()) + ':' + doisDig(a.getMinutes());
+  var s = document.getElementById('diasem');
+  if (s) s.innerHTML = DIAS[a.getDay()];
+}
+
+/* Mede cada card numa coluna da largura certa */
+function medir(cards, nCol, tam) {
+  var quadro = document.getElementById('quadro');
+  var w = (100 / nCol).toFixed(4) + '%', h = '', i;
+  quadro.style.fontSize = tam + 'px';
+  for (i = 0; i < cards.length; i++) h += cards[i].html;
+  quadro.innerHTML = '<div class="coluna" style="width:' + w + '">' + h + '</div>';
+  var filhos = quadro.firstChild.childNodes, alt = [];
+  for (i = 0; i < filhos.length; i++) alt.push(filhos[i].offsetHeight + 16);
+  return alt;
+}
+function distribuir(alt, nCol) {
+  var cols = [], alturas = [], i, c;
+  for (i = 0; i < nCol; i++) { cols.push([]); alturas.push(0); }
+  for (i = 0; i < alt.length; i++) {
+    var menor = 0;
+    for (c = 1; c < nCol; c++) if (alturas[c] < alturas[menor]) menor = c;
+    cols[menor].push(i);
+    alturas[menor] += alt[i];
+  }
+  var max = 0;
+  for (c = 0; c < nCol; c++) if (alturas[c] > max) max = alturas[c];
+  return { cols: cols, max: max };
+}
+function desenhar(cards, nCol, tam, cols) {
+  var quadro = document.getElementById('quadro');
+  var w = (100 / nCol).toFixed(4) + '%', h = '', i, j;
+  quadro.style.fontSize = tam + 'px';
+  for (i = 0; i < nCol; i++) {
+    h += '<div class="coluna" style="width:' + w + '">';
+    for (j = 0; j < cols[i].length; j++) h += cards[cols[i][j]].html;
+    h += '</div>';
+  }
+  quadro.innerHTML = h + '<div class="limpa"></div>';
+}
+var layoutAnterior = null;
+function layout(cards, reaproveitar) {
+  if (reaproveitar && layoutAnterior && layoutAnterior.qtd === cards.length) {
+    desenhar(cards, layoutAnterior.n, layoutAnterior.tam, layoutAnterior.cols);
+    return;
+  }
+  var alturaTela = window.innerHeight || document.documentElement.clientHeight;
+  var disponivel = alturaTela - document.getElementById('topo').offsetHeight - 36;
+  var opcoes = cards.length <= 4 ? [2, 3, 4] : (cards.length <= 8 ? [3, 4, 5] : [4, 5, 6]);
+  var melhor = null, k, tam;
+  for (k = 0; k < opcoes.length; k++) {
+    for (tam = 44; tam >= 14; tam--) {
+      var d = distribuir(medir(cards, opcoes[k], tam), opcoes[k]);
+      if (d.max <= disponivel) {
+        if (!melhor || tam > melhor.tam) melhor = { n: opcoes[k], tam: tam, cols: d.cols };
+        break;
+      }
+    }
+  }
+  if (!melhor) {
+    var nn = opcoes[opcoes.length - 1];
+    melhor = { n: nn, tam: 14, cols: distribuir(medir(cards, nn, 14), nn).cols };
+  }
+  melhor.qtd = cards.length;
+  layoutAnterior = melhor;
+  desenhar(cards, melhor.n, melhor.tam, melhor.cols);
+}
+
+/* reaproveitar=true: só mudou tick/monday, mantém o layout (sem "pular" na tela) */
+function render(reaproveitar) {
+  var d = lerDados(estado.texto);
+  var cards = [], tot = 0, feitos = 0, i;
+  for (i = 0; i < d.pessoas.length; i++) {
+    var c = htmlCard(d.pessoas[i], i);
+    cards.push(c); tot += c.n; feitos += c.feitos;
+  }
+  montarTopo(d, tot, feitos);
+  layout(cards, reaproveitar);
+  var st = document.getElementById('status');
+  st.className = estado.online ? '' : 'off';
+  st.innerHTML = estado.online ? 'ao vivo' : 'sem conexão com o banco &ndash; mostrando o último dado';
+}
+
+/* =================== dados do banco =================== */
+function carregar(primeira) {
+  ajax('GET', '/rest/v1/tv_daily?select=dia,texto&order=dia.desc&limit=1', null, null, function (linhas) {
+    var dia, texto;
+    if (linhas && linhas.length) { dia = linhas[0].dia; texto = linhas[0].texto; }
+    else { dia = hojeISO(); texto = document.getElementById('exemplo').text; }
+    ajax('GET', '/rest/v1/tv_ticks?select=chave,feito&dia=eq.' + dia, null, null, function (t) {
+      var ticks = {};
+      for (var i = 0; t && i < t.length; i++) if (t[i].feito) ticks[t[i].chave] = true;
+      var mudouTexto = texto !== estado.texto || dia !== estado.dia;
+      var assin = dia + '\n' + texto + '\n' + JSON.stringify(ticks);
+      estado.online = true;
+      if (assin !== estado.ultimaAssinatura || primeira) {
+        estado.dia = dia; estado.texto = texto; estado.ticks = ticks; estado.ultimaAssinatura = assin;
+        render(!mudouTexto && !primeira);
+      }
+    }, falhouBanco);
+  }, falhouBanco);
+}
+function falhouBanco() {
+  estado.online = false;
+  if (!estado.texto) { estado.texto = document.getElementById('exemplo').text; estado.dia = hojeISO(); render(false); }
+  else render(true);
+}
+function carregarMonday() {
+  var x = new XMLHttpRequest();
+  x.open('GET', CONFIG.SUPABASE_URL + '/functions/v1/tv-monday', true);
+  x.setRequestHeader('apikey', CONFIG.SUPABASE_KEY);
+  x.setRequestHeader('Authorization', 'Bearer ' + CONFIG.SUPABASE_KEY);
+  x.timeout = 60000;
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4) return;
+    var d = null;
+    try { d = JSON.parse(x.responseText); } catch (e) { d = null; }
+    if (x.status === 200 && d && typeof d.total_sem_comentario === 'number') { estado.monday = d; estado.mondayErro = null; }
+    else estado.mondayErro = (d && d.erro) || ('erro ' + x.status);
+    if (estado.texto) render(true);
+  };
+  x.send(null);
+}
+
+/* =================== interação (PC) =================== */
+function marcar(chave, feito) {
+  if (feito) estado.ticks[chave] = true; else delete estado.ticks[chave];
+  render(true);
+  ajax('POST', '/rest/v1/tv_ticks?on_conflict=dia,chave', { dia: estado.dia, chave: chave, feito: feito, atualizado_em: new Date().toISOString() },
+    { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+    function () { estado.ultimaAssinatura = ''; },
+    function (e) { alert('Não consegui salvar o tick: ' + e); carregar(false); });
+}
+document.getElementById('quadro').onclick = function (ev) {
+  if (MODO_TV) return;
+  ev = ev || window.event;
+  var el = ev.target || ev.srcElement;
+  while (el && el !== this) {
+    if (el.className && (' ' + el.className + ' ').indexOf(' item ') >= 0) {
+      var chave = el.getAttribute('data-chave');
+      marcar(chave, !estado.ticks[chave]);
+      return;
+    }
+    el = el.parentNode;
+  }
+};
+
+function fecharJanela() { document.getElementById('janela').style.display = 'none'; }
+function abrirEditor() {
+  var c = document.getElementById('caixa');
+  c.innerHTML = '<h2>Daily do dia</h2>' +
+    '<div>Dia: <input type="date" id="edDia" value="' + hojeISO() + '"></div>' +
+    '<div class="ajuda"><code>DATA: 11/11</code> data no topo &middot; <code>@ Nome</code> pessoa &middot; <code>@ Nome | Folga</code> folga &middot; ' +
+    '<code># Grupo</code> subtítulo &middot; número no começo vira destaque &middot; <code>! texto</code> alerta. ' +
+    'Os ticks de tarefas que continuarem com o mesmo texto são mantidos no mesmo dia.</div>' +
+    '<textarea id="edTexto"></textarea>' +
+    '<div style="margin-top:14px"><button class="btn" onclick="salvarDaily()">Salvar e mostrar na TV</button>' +
+    '<button class="btn sec" onclick="fecharJanela()">Cancelar</button></div>';
+  var texto = estado.texto;
+  if (estado.dia !== hojeISO()) texto = texto.replace(/^\s*DATA\s*:.*$/im, 'DATA: ' + isoParaBR(hojeISO()));
+  document.getElementById('edTexto').value = texto;
+  document.getElementById('janela').style.display = 'block';
+}
+function salvarDaily() {
+  var dia = document.getElementById('edDia').value || hojeISO();
+  var texto = document.getElementById('edTexto').value;
+  if (!/^\s*DATA\s*:/im.test(texto)) texto = 'DATA: ' + isoParaBR(dia) + '\n' + texto;
+  ajax('POST', '/rest/v1/tv_daily?on_conflict=dia', { dia: dia, texto: texto, atualizado_em: new Date().toISOString() },
+    { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+    function () { fecharJanela(); estado.ultimaAssinatura = ''; carregar(true); },
+    function (e) { alert('Não consegui salvar a daily: ' + e); });
+}
+function verProjetos() {
+  if (MODO_TV) return;
+  var m = estado.monday, c = document.getElementById('caixa');
+  var h = '<h2>Projetos da Produção sem comentário hoje</h2>';
+  if (!m) h += '<p>' + esc(estado.mondayErro || 'Ainda carregando...') + '</p>';
+  else {
+    h += '<div class="ajuda">Quadro "Delivery Produção", grupo Tarefas Pendentes, pela coluna Delivery FUP. ' +
+      'Conta só comentário de pessoa feito hoje (os automáticos com 🤖 não contam).</div><div class="lista">';
+    for (var i = 0; i < m.pessoas.length; i++) {
+      var p = m.pessoas[i];
+      h += '<h3>' + esc(p.nome) + ': ' + p.sem + ' de ' + p.total + '</h3><ul>';
+      for (var j = 0; j < p.projetos.length; j++) h += '<li>' + esc(p.projetos[j]) + '</li>';
+      h += '</ul>';
+    }
+    h += '</div>';
+  }
+  h += '<button class="btn sec" onclick="fecharJanela()">Fechar</button>';
+  c.innerHTML = h;
+  document.getElementById('janela').style.display = 'block';
+}
+function abrirTV() {
+  var u = window.location.href.split('#')[0];
+  window.open(u + (u.indexOf('?') >= 0 ? '&' : '?') + 'tv', '_blank');
+}
+
+/* =================== início =================== */
+window.onload = function () {
+  carregar(true);
+  carregarMonday();
+  setInterval(function () { carregar(false); }, CONFIG.SEGUNDOS_TICKS * 1000);
+  setInterval(carregarMonday, CONFIG.SEGUNDOS_MONDAY * 1000);
+  setInterval(tick, 10000);
+  // Na TV, recarrega a página inteira a cada 6 h (evita o navegador da TV ir ficando lento)
+  if (MODO_TV) setTimeout(function () { window.location.reload(true); }, 6 * 3600 * 1000);
+};
+var tmResize = null;
+window.onresize = function () {
+  clearTimeout(tmResize);
+  tmResize = setTimeout(function () { layoutAnterior = null; if (estado.texto) render(false); }, 300);
+};
+</script>
+</body>
+</html>
