@@ -99,7 +99,7 @@ body.pc { overflow: auto; }
 #topo .sobe { color: #ef5b5b; }
 #topo .desce { color: #3ecf7a; }
 
-/* Faixa do monday (Quarteto sem FUP) - nunca quebra linha */
+/* Faixa do monday (FUP pendente) - nunca quebra linha */
 #monday { white-space: nowrap; margin-top: 0.625em; background: #1c1c1f; border-radius: 0.75em; padding: 0.625em 1.375em; overflow: hidden; border-left: 0.5em solid #FFC72C; }
 #monday .mtit { display: inline-block; vertical-align: middle; font-size: 1.375em; letter-spacing: 2px; text-transform: uppercase; color: #9a9a9f; line-height: 2.545em; font-weight: bold; }
 #monday .mtot { display: inline-block; vertical-align: middle; font-size: 3.25em; font-weight: bold; color: #FFC72C; line-height: 1.077em; margin: 0 0.5em 0 0.3462em; }
@@ -360,10 +360,10 @@ function htmlDolar() {
 function htmlMonday() {
   var m = estado.monday;
   if (!m) {
-    return '<div id="monday" class="erro" onclick="verProjetos()"><span class="mtit">Quarteto sem FUP</span><span class="mtot">&ndash;</span>' +
+    return '<div id="monday" class="erro" onclick="verProjetos()"><span class="mtit">FUP pendente</span><span class="mtot">&ndash;</span>' +
       '<span class="mhora">' + (estado.mondayErro ? 'monday indisponível' : 'carregando...') + '</span></div>';
   }
-  var h = '<div id="monday" onclick="verProjetos()"><span class="mtit">Quarteto sem FUP</span>' +
+  var h = '<div id="monday" onclick="verProjetos()"><span class="mtit">FUP pendente</span>' +
     '<span class="mtot">' + m.total_sem_comentario + ' <small>de ' + m.total_projetos + '</small></span>';
   for (var i = 0; i < m.pessoas.length; i++) {
     var p = m.pessoas[i];
@@ -566,12 +566,13 @@ function salvarDaily() {
 function verProjetos() {
   if (MODO_TV) return;
   var m = estado.monday, c = document.getElementById('caixa');
-  var h = '<h2>Quarteto sem FUP hoje</h2>';
+  var h = '<h2>FUP pendente hoje</h2>';
   if (!m) h += '<p>' + esc(estado.mondayErro || 'Ainda carregando...') + '</p>';
   else {
     var qs = '';
     for (var q = 0; m.quadros && q < m.quadros.length; q++) qs += (q ? ' &middot; ' : '') + esc(m.quadros[q].nome) + ': ' + m.quadros[q].sem + ' de ' + m.quadros[q].total;
-    h += '<div class="ajuda">Quadros Produção, Financeiro Inicial e Financeiro Final (grupo Tarefas Pendentes), pela coluna Delivery FUP.<br>' + qs + '<br>' +
+    h += '<div class="ajuda">Só o grupo Tarefas Pendentes de cada quadro (pausadas e finalizadas não entram). ' +
+      'Pietra, Rhany, Carol e Jana: Produção, Financeiro Inicial e Final, pela coluna Delivery FUP. Helo: Contrato, Auditorias e QC, pela coluna Delivery.<br>' + qs + '<br>' +
       'Conta só comentário de pessoa feito hoje (os automáticos com 🤖 não contam).</div><div class="lista">';
     for (var i = 0; i < m.pessoas.length; i++) {
       var p = m.pessoas[i];

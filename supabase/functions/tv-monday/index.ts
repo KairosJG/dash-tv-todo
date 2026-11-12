@@ -1,20 +1,26 @@
-// "Quarteto sem FUP": conta, nos quadros Produção, Financeiro Inicial e Financeiro Final
-// (grupo Tarefas Pendentes), quantos itens ainda não receberam comentário humano HOJE
-// (fuso de São Paulo), por pessoa do Delivery FUP.
+// "FUP pendente": conta, só no grupo Tarefas Pendentes de cada quadro (pausadas, finalizadas etc. ficam de fora),
+// quantos itens ainda não receberam comentário humano HOJE (fuso de São Paulo), por pessoa.
+// - Pietra, Rhany, Carol e Jana: quadros Produção, Financeiro Inicial e Financeiro Final, pela coluna "Delivery FUP".
+// - Helo: quadros Contrato, Auditorias e QC, pela coluna de pessoas "Delivery".
 // Comentários automáticos (sem autor ou começando com 🤖) não contam.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const GRUPO = "topics"; // Tarefas Pendentes
+const QUARTETO = ["Pietra", "Rhany", "Carol", "Jana"];
 const QUADROS = [
-  { id: 18303087624, nome: "Produção", fup: "lookup_mm6bfsyr" },
-  { id: 18325634208, nome: "Financeiro Inicial", fup: "lookup_mm6b602a" },
-  { id: 18379293104, nome: "Financeiro Final", fup: "lookup_mm6bkd7k" },
+  { id: 18303087624, nome: "Produção", coluna: "lookup_mm6bfsyr", pessoas: QUARTETO },
+  { id: 18325634208, nome: "Financeiro Inicial", coluna: "lookup_mm6b602a", pessoas: QUARTETO },
+  { id: 18379293104, nome: "Financeiro Final", coluna: "lookup_mm6bkd7k", pessoas: QUARTETO },
+  { id: 18302830187, nome: "Contrato", coluna: "dup__of_an_lise__1", pessoas: ["Helo"] },
+  { id: 18301018151, nome: "Auditorias", coluna: "dup__of_an_lise__1", pessoas: ["Helo"] },
+  { id: 18303271824, nome: "QC", coluna: "dup__of_an_lise__1", pessoas: ["Helo"] },
 ];
 const PESSOAS: { nome: string; busca: string }[] = [
   { nome: "Pietra", busca: "pietra" },
   { nome: "Rhany", busca: "rhaniery" },
   { nome: "Carol", busca: "caroline" },
   { nome: "Jana", busca: "janayna" },
+  { nome: "Helo", busca: "helo" },
 ];
 const CACHE_SEGUNDOS = 180;
 
@@ -46,23 +52,23 @@ async function monday(query: string, variables: Record<string, unknown>) {
   return j.data;
 }
 
-const campos = (fup: string) => `items { id name updates(limit: 10) { created_at text_body creator { id } }
-  column_values(ids: ["${fup}"]) { ... on MirrorValue { display_value } } }`;
+const campos = (col: string) => `items { id name updates(limit: 10) { created_at text_body creator { id } }
+  column_values(ids: ["${col}"]) { text ... on MirrorValue { display_value } } }`;
 
-async function itensDoQuadro(q: { id: number; nome: string; fup: string }) {
+async function itensDoQuadro(q: (typeof QUADROS)[number]) {
   const itens: any[] = [];
   let d = await monday(
-    `query($b:[ID!]){ boards(ids:$b){ groups(ids:["${GRUPO}"]){ items_page(limit:100){ cursor ${campos(q.fup)} } } } }`,
+    `query($b:[ID!]){ boards(ids:$b){ groups(ids:["${GRUPO}"]){ items_page(limit:100){ cursor ${campos(q.coluna)} } } } }`,
     { b: [q.id] },
   );
   let page = d.boards[0].groups[0].items_page;
   itens.push(...page.items);
   while (page.cursor) {
-    d = await monday(`query($c:String!){ next_items_page(cursor:$c, limit:100){ cursor ${campos(q.fup)} } }`, { c: page.cursor });
+    d = await monday(`query($c:String!){ next_items_page(cursor:$c, limit:100){ cursor ${campos(q.coluna)} } }`, { c: page.cursor });
     page = d.next_items_page;
     itens.push(...page.items);
   }
-  return itens.map((it) => ({ ...it, quadro: q.nome }));
+  return itens.map((it) => ({ ...it, quadro: q.nome, pessoasDoQuadro: q.pessoas }));
 }
 
 async function calcular() {
@@ -76,8 +82,9 @@ async function calcular() {
   let totalSem = 0, totalProjetos = 0;
 
   for (const it of itens) {
-    const fup = String(it.column_values?.[0]?.display_value ?? "").toLowerCase();
-    const donos = PESSOAS.filter((p) => fup.indexOf(p.busca) >= 0);
+    const cv = it.column_values?.[0] ?? {};
+    const quem = String(cv.display_value ?? cv.text ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const donos = PESSOAS.filter((p) => it.pessoasDoQuadro.indexOf(p.nome) >= 0 && quem.indexOf(p.busca) >= 0);
     if (!donos.length) continue;
     const comentouHoje = (it.updates ?? []).some((u: any) =>
       u.creator && u.creator.id && !String(u.text_body ?? "").trim().startsWith("🤖") && diaSP(u.created_at) === hoje
@@ -107,7 +114,7 @@ Deno.serve(async (req) => {
     const { data: cache } = await sb.from("tv_monday_cache").select("dados, atualizado_em").eq("id", 1).maybeSingle();
     if (
       cache && Date.now() - new Date(cache.atualizado_em).getTime() < CACHE_SEGUNDOS * 1000 &&
-      cache.dados?.dia === hojeSP() && cache.dados?.quadros
+      cache.dados?.dia === hojeSP() && cache.dados?.quadros?.length === QUADROS.length
     ) {
       return new Response(JSON.stringify(cache.dados), { headers: { ...cors, "Content-Type": "application/json" } });
     }
