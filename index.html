@@ -16,7 +16,8 @@ var CONFIG = {
   SUPABASE_URL: 'https://mhzcnaqrmvugfeanmito.supabase.co',
   SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oemNuYXFybXZ1Z2ZlYW5taXRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MzQzMDAsImV4cCI6MjEwOTQxMDMwMH0.uQaS2lZa-a9WKpz2Tm1-exLMQ-7wvtO56OXxOkvQXGU',
   SEGUNDOS_TICKS: 15,      // de quanto em quanto tempo a TV busca os ticks/daily
-  SEGUNDOS_MONDAY: 180     // de quanto em quanto tempo busca a contagem do monday
+  SEGUNDOS_MONDAY: 180,    // de quanto em quanto tempo busca a contagem do monday
+  SEGUNDOS_DOLAR: 300      // de quanto em quanto tempo busca o dólar
 };
 </script>
 <!-- Daily de exemplo: só é usada se ainda não houver nenhuma daily salva no banco. -->
@@ -94,6 +95,9 @@ body.pc { overflow: auto; }
 #topo .lbl { font-size: 1.062em; color: #9a9a9f; text-transform: uppercase; letter-spacing: 2px; line-height: 1.294em; }
 #topo .relogio { font-size: 3.625em; font-weight: bold; line-height: 0.9655em; }
 #topo .verde { color: #3ecf7a; }
+#topo .dolar .num small { font-size: 0.5em; color: #9a9a9f; font-weight: normal; margin-right: 0.15em; }
+#topo .sobe { color: #ef5b5b; }
+#topo .desce { color: #3ecf7a; }
 
 /* Faixa do monday (Quarteto sem FUP) - nunca quebra linha */
 #monday { white-space: nowrap; margin-top: 0.625em; background: #1c1c1f; border-radius: 0.75em; padding: 0.625em 1.375em; overflow: hidden; border-left: 0.5em solid #FFC72C; }
@@ -332,11 +336,25 @@ function montarTopo(d, totalItens, totalFeitos) {
     '<div class="tit">TO-DO <span class="ouro">DO DIA</span><span class="sub">Daily ' + esc(data) + (antiga ? ' (ainda não tem a de hoje)' : '') + '</span></div>' +
     '<div class="dir">' +
       '<div class="bloco"><div class="num' + (totalItens && totalFeitos === totalItens ? ' verde' : '') + '">' + totalFeitos + '<span style="color:#6f6f75">/' + totalItens + '</span></div><div class="lbl">tarefas feitas</div></div>' +
+      htmlDolar() +
       '<div class="bloco"><div class="relogio" id="relogio"></div><div class="lbl" id="diasem"></div></div>' +
     '</div></div>';
   h += htmlMonday();
   document.getElementById('topo').innerHTML = h;
   tick();
+}
+
+function htmlDolar() {
+  var d = estado.dolar;
+  if (!d) return '';
+  var v = d.valor.toFixed(2).replace('.', ',');
+  var pct = isNaN(d.variacao_pct) ? '' : d.variacao_pct;
+  var lbl = 'dólar';
+  if (pct !== '') {
+    var seta = pct > 0 ? '&#9650; ' : (pct < 0 ? '&#9660; ' : '');
+    lbl += ' <span class="' + (pct > 0 ? 'sobe' : (pct < 0 ? 'desce' : '')) + '">' + seta + Math.abs(pct).toFixed(2).replace('.', ',') + '%</span>';
+  }
+  return '<div class="bloco dolar"><div class="num"><small>R$</small>' + v + '</div><div class="lbl">' + lbl + '</div></div>';
 }
 
 function htmlMonday() {
@@ -465,6 +483,20 @@ function falhouBanco() {
   estado.online = false;
   if (!estado.texto) { estado.texto = document.getElementById('exemplo').text; estado.dia = hojeISO(); render(false); }
   else render(true);
+}
+function carregarDolar() {
+  var x = new XMLHttpRequest();
+  x.open('GET', CONFIG.SUPABASE_URL + '/functions/v1/tv-dolar', true);
+  x.setRequestHeader('apikey', CONFIG.SUPABASE_KEY);
+  x.setRequestHeader('Authorization', 'Bearer ' + CONFIG.SUPABASE_KEY);
+  x.timeout = 30000;
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4) return;
+    var d = null;
+    try { d = JSON.parse(x.responseText); } catch (e) { d = null; }
+    if (x.status === 200 && d && typeof d.valor === 'number') { estado.dolar = d; if (estado.texto) render(true); }
+  };
+  x.send(null);
 }
 function carregarMonday() {
   var x = new XMLHttpRequest();
@@ -595,6 +627,8 @@ window.onload = function () {
   carregarMonday();
   setInterval(function () { carregar(false); }, CONFIG.SEGUNDOS_TICKS * 1000);
   setInterval(carregarMonday, CONFIG.SEGUNDOS_MONDAY * 1000);
+  carregarDolar();
+  setInterval(carregarDolar, CONFIG.SEGUNDOS_DOLAR * 1000);
   setInterval(tick, 10000);
   // Na TV, recarrega a página inteira a cada 6 h (evita o navegador da TV ir ficando lento)
   if (MODO_TV) setTimeout(function () { window.location.reload(true); }, 6 * 3600 * 1000);
