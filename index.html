@@ -572,7 +572,7 @@ function verProjetos() {
     var qs = '';
     for (var q = 0; m.quadros && q < m.quadros.length; q++) qs += (q ? ' &middot; ' : '') + esc(m.quadros[q].nome) + ': ' + m.quadros[q].sem + ' de ' + m.quadros[q].total;
     h += '<div class="ajuda">Só o grupo Tarefas Pendentes de cada quadro (pausadas e finalizadas não entram). ' +
-      'Pietra, Rhany, Carol e Jana: Produção, Financeiro Inicial e Final, pela coluna Delivery FUP. Helo: Contrato, Auditorias e QC, pela coluna Delivery.<br>' + qs + '<br>' +
+      'Pietra, Rhany, Carol e Jana: Produção, Financeiro Inicial e Final, pela coluna Delivery FUP. Helo: Contrato e Auditorias, pela coluna Delivery, e o quadro QC inteiro.<br>' + qs + '<br>' +
       'Conta só comentário de pessoa feito hoje (os automáticos com 🤖 não contam).</div><div class="lista">';
     for (var i = 0; i < m.pessoas.length; i++) {
       var p = m.pessoas[i];

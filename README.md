@@ -18,4 +18,4 @@ DATA: 11/11
 ## Backend (Supabase: portal-delivery)
 - `supabase/migrations/001_tv_todo.sql`: tabelas `tv_daily`, `tv_ticks`, `tv_monday_cache`
 - `supabase/functions/tv-dolar`: dólar do dia (AwesomeAPI, com PTAX do Banco Central como reserva), mostrado ao lado do relógio.
-- `supabase/functions/tv-monday`: "FUP pendente", itens do grupo Tarefas Pendentes sem comentário humano hoje. Pietra, Rhany, Carol e Jana: Produção, Financeiro Inicial e Final (coluna Delivery FUP). Helo: Contrato, Auditorias e QC (coluna Delivery). Precisa do secret `MONDAY_TOKEN`.
+- `supabase/functions/tv-monday`: "FUP pendente", itens do grupo Tarefas Pendentes sem comentário humano hoje. Pietra, Rhany, Carol e Jana: Produção, Financeiro Inicial e Final (coluna Delivery FUP). Helo: Contrato e Auditorias (coluna Delivery) e o quadro QC inteiro. Precisa do secret `MONDAY_TOKEN`.

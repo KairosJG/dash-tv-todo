@@ -1,7 +1,7 @@
 // "FUP pendente": conta, só no grupo Tarefas Pendentes de cada quadro (pausadas, finalizadas etc. ficam de fora),
 // quantos itens ainda não receberam comentário humano HOJE (fuso de São Paulo), por pessoa.
 // - Pietra, Rhany, Carol e Jana: quadros Produção, Financeiro Inicial e Financeiro Final, pela coluna "Delivery FUP".
-// - Helo: quadros Contrato, Auditorias e QC, pela coluna de pessoas "Delivery".
+// - Helo: quadros Contrato e Auditorias, pela coluna de pessoas "Delivery"; e o quadro QC inteiro (todo item pendente é dela).
 // Comentários automáticos (sem autor ou começando com 🤖) não contam.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -13,7 +13,7 @@ const QUADROS = [
   { id: 18379293104, nome: "Financeiro Final", coluna: "lookup_mm6bkd7k", pessoas: QUARTETO },
   { id: 18302830187, nome: "Contrato", coluna: "dup__of_an_lise__1", pessoas: ["Helo"] },
   { id: 18301018151, nome: "Auditorias", coluna: "dup__of_an_lise__1", pessoas: ["Helo"] },
-  { id: 18303271824, nome: "QC", coluna: "dup__of_an_lise__1", pessoas: ["Helo"] },
+  { id: 18303271824, nome: "QC", coluna: "dup__of_an_lise__1", pessoas: ["Helo"], todos: true },
 ];
 const PESSOAS: { nome: string; busca: string }[] = [
   { nome: "Pietra", busca: "pietra" },
@@ -68,7 +68,7 @@ async function itensDoQuadro(q: (typeof QUADROS)[number]) {
     page = d.next_items_page;
     itens.push(...page.items);
   }
-  return itens.map((it) => ({ ...it, quadro: q.nome, pessoasDoQuadro: q.pessoas }));
+  return itens.map((it) => ({ ...it, quadro: q.nome, pessoasDoQuadro: q.pessoas, todos: !!(q as any).todos }));
 }
 
 async function calcular() {
@@ -84,7 +84,7 @@ async function calcular() {
   for (const it of itens) {
     const cv = it.column_values?.[0] ?? {};
     const quem = String(cv.display_value ?? cv.text ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    const donos = PESSOAS.filter((p) => it.pessoasDoQuadro.indexOf(p.nome) >= 0 && quem.indexOf(p.busca) >= 0);
+    const donos = PESSOAS.filter((p) => it.pessoasDoQuadro.indexOf(p.nome) >= 0 && (it.todos || quem.indexOf(p.busca) >= 0));
     if (!donos.length) continue;
     const comentouHoje = (it.updates ?? []).some((u: any) =>
       u.creator && u.creator.id && !String(u.text_body ?? "").trim().startsWith("🤖") && diaSP(u.created_at) === hoje
@@ -98,6 +98,7 @@ async function calcular() {
     }
   }
   return {
+    versao: 2,
     dia: hoje,
     total_sem_comentario: totalSem,
     total_projetos: totalProjetos,
@@ -114,7 +115,7 @@ Deno.serve(async (req) => {
     const { data: cache } = await sb.from("tv_monday_cache").select("dados, atualizado_em").eq("id", 1).maybeSingle();
     if (
       cache && Date.now() - new Date(cache.atualizado_em).getTime() < CACHE_SEGUNDOS * 1000 &&
-      cache.dados?.dia === hojeSP() && cache.dados?.quadros?.length === QUADROS.length
+      cache.dados?.dia === hojeSP() && cache.dados?.versao === 2
     ) {
       return new Response(JSON.stringify(cache.dados), { headers: { ...cors, "Content-Type": "application/json" } });
     }
