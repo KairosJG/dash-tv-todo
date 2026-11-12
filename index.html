@@ -348,8 +348,8 @@ function htmlDolar() {
   var d = estado.dolar;
   if (!d) return '';
   var v = d.valor.toFixed(2).replace('.', ',');
-  var pct = isNaN(d.variacao_pct) ? '' : d.variacao_pct;
-  var lbl = 'dólar';
+  var pct = (d.variacao_pct === null || isNaN(d.variacao_pct)) ? '' : d.variacao_pct;
+  var lbl = 'dólar' + (d.fonte && d.fonte !== 'comercial' ? ' ' + esc(d.fonte) : '');
   if (pct !== '') {
     var seta = pct > 0 ? '&#9650; ' : (pct < 0 ? '&#9660; ' : '');
     lbl += ' <span class="' + (pct > 0 ? 'sobe' : (pct < 0 ? 'desce' : '')) + '">' + seta + Math.abs(pct).toFixed(2).replace('.', ',') + '%</span>';

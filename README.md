@@ -17,5 +17,5 @@ DATA: 11/11
 
 ## Backend (Supabase: portal-delivery)
 - `supabase/migrations/001_tv_todo.sql`: tabelas `tv_daily`, `tv_ticks`, `tv_monday_cache`
-- `supabase/functions/tv-dolar`: dólar comercial do dia (AwesomeAPI), mostrado ao lado do relógio.
+- `supabase/functions/tv-dolar`: dólar do dia (AwesomeAPI, com PTAX do Banco Central como reserva), mostrado ao lado do relógio.
 - `supabase/functions/tv-monday`: "Quarteto sem FUP", conta os itens dos quadros Produção, Financeiro Inicial e Financeiro Final (grupo Tarefas Pendentes) sem comentário humano hoje, por Delivery FUP (Pietra, Rhany, Carol, Jana). Precisa do secret `MONDAY_TOKEN`.
