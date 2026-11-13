@@ -1,7 +1,8 @@
 // "FUP pendente": conta, só no grupo Tarefas Pendentes de cada quadro (pausadas, finalizadas etc. ficam de fora),
 // quantos itens ainda não receberam comentário humano HOJE (fuso de São Paulo), por pessoa.
 // - Pietra, Rhany, Carol e Jana: quadros Produção, Financeiro Inicial e Financeiro Final, pela coluna "Delivery FUP".
-// - Helo: quadros Contrato e Auditorias, pela coluna de pessoas "Delivery"; e o quadro QC inteiro (todo item pendente é dela).
+// - Helo: quadros Contrato e Auditorias, pela coluna de pessoas "Delivery"; e o quadro QC inteiro (todo item pendente é dela),
+//   menos os itens do QC com Task = "Aprovação QC", que contam para o quarteto pela coluna "Delivery FUP".
 // Comentários automáticos (sem autor ou começando com 🤖) não contam.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -13,7 +14,8 @@ const QUADROS = [
   { id: 18379293104, nome: "Financeiro Final", coluna: "lookup_mm6bkd7k", pessoas: QUARTETO },
   { id: 18302830187, nome: "Contrato", coluna: "dup__of_an_lise__1", pessoas: ["Helo"] },
   { id: 18301018151, nome: "Auditorias", coluna: "dup__of_an_lise__1", pessoas: ["Helo"] },
-  { id: 18303271824, nome: "QC", coluna: "dup__of_an_lise__1", pessoas: ["Helo"], todos: true },
+  { id: 18303271824, nome: "QC", coluna: "dup__of_an_lise__1", pessoas: ["Helo"], todos: true, statusFora: "Aprovação QC" },
+  { id: 18303271824, nome: "QC Aprovação", coluna: "lookup_mm6bd0na", pessoas: QUARTETO, statusSo: "Aprovação QC" },
 ];
 const PESSOAS: { nome: string; busca: string }[] = [
   { nome: "Pietra", busca: "pietra" },
@@ -53,7 +55,7 @@ async function monday(query: string, variables: Record<string, unknown>) {
 }
 
 const campos = (col: string) => `items { id name updates(limit: 10) { created_at text_body creator { id } }
-  column_values(ids: ["${col}"]) { text ... on MirrorValue { display_value } } }`;
+  column_values(ids: ["${col}", "status"]) { id text ... on MirrorValue { display_value } } }`;
 
 async function itensDoQuadro(q: (typeof QUADROS)[number]) {
   const itens: any[] = [];
@@ -68,7 +70,14 @@ async function itensDoQuadro(q: (typeof QUADROS)[number]) {
     page = d.next_items_page;
     itens.push(...page.items);
   }
-  return itens.map((it) => ({ ...it, quadro: q.nome, pessoasDoQuadro: q.pessoas, todos: !!(q as any).todos }));
+  const qq = q as any;
+  return itens
+    .map((it) => {
+      const status = String((it.column_values ?? []).find((c: any) => c.id === "status")?.text ?? "");
+      const cv = (it.column_values ?? []).find((c: any) => c.id === q.coluna) ?? {};
+      return { ...it, cv, status, quadro: q.nome, pessoasDoQuadro: q.pessoas, todos: !!qq.todos };
+    })
+    .filter((it) => (!qq.statusSo || it.status === qq.statusSo) && (!qq.statusFora || it.status !== qq.statusFora));
 }
 
 async function calcular() {
@@ -82,7 +91,7 @@ async function calcular() {
   let totalSem = 0, totalProjetos = 0;
 
   for (const it of itens) {
-    const cv = it.column_values?.[0] ?? {};
+    const cv = it.cv ?? {};
     const quem = String(cv.display_value ?? cv.text ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const donos = PESSOAS.filter((p) => it.pessoasDoQuadro.indexOf(p.nome) >= 0 && (it.todos || quem.indexOf(p.busca) >= 0));
     if (!donos.length) continue;
@@ -98,7 +107,7 @@ async function calcular() {
     }
   }
   return {
-    versao: 2,
+    versao: 3,
     dia: hoje,
     total_sem_comentario: totalSem,
     total_projetos: totalProjetos,
@@ -115,7 +124,7 @@ Deno.serve(async (req) => {
     const { data: cache } = await sb.from("tv_monday_cache").select("dados, atualizado_em").eq("id", 1).maybeSingle();
     if (
       cache && Date.now() - new Date(cache.atualizado_em).getTime() < CACHE_SEGUNDOS * 1000 &&
-      cache.dados?.dia === hojeSP() && cache.dados?.versao === 2
+      cache.dados?.dia === hojeSP() && cache.dados?.versao === 3
     ) {
       return new Response(JSON.stringify(cache.dados), { headers: { ...cors, "Content-Type": "application/json" } });
     }
